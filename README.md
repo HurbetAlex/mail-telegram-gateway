@@ -128,7 +128,7 @@ Set in `.env` (see `.env.example`). The main variables:
 
 ```bash
 pip install -r requirements-dev.txt
-python -m pytest -q          # 205 tests
+python -m pytest -q          # 219 tests
 ```
 
 Tests cover message and header parsing, original-recipient detection behind forwards, one-time code extraction and masking, search operator parsing, access rules, unsubscribe URL validation (including SSRF guards), from-address selection, the Mini App API (auth, routes, parity with the bot) and server status checks. They run without Docker, Telegram or MongoDB. CI runs the suite and a shell syntax check on the scripts.
