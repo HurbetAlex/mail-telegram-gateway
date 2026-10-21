@@ -1,0 +1,14 @@
+{$WEBAPP_DOMAIN}
+
+encode gzip
+
+# Mini App API -> app container
+handle /api/* {
+	reverse_proxy app:8080
+}
+
+# Mini App static files (web/)
+handle {
+	root * /srv
+	file_server
+}

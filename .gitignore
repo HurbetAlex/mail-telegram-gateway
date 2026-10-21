@@ -1,0 +1,13 @@
+.env
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+.venv/
+.pytest_cache/
+sasl_passwd
+sasl_users
+*.log
+backups/
+status/
+blobs/

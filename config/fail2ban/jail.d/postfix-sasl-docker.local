@@ -1,0 +1,17 @@
+# Ban SMTP auth brute force (postfix in docker). Installed by scripts/setup-fail2ban.sh.
+[postfix-sasl-docker]
+enabled  = true
+filter   = postfix-sasl-docker
+backend  = systemd
+port     = smtp,465,submission
+# 5 failed authentications in 10 minutes = a one-day ban (a typo in the password counts too).
+maxretry = 5
+findtime = 10m
+bantime  = 1d
+# Traffic to containers goes through FORWARD, not INPUT, so we ban in DOCKER-USER.
+# The host SSH (INPUT chain) is not affected.
+# The chain is set by the jail option chain: the action in jail.conf is built as
+# banaction[..., chain="%(chain)s"], and a chain inside the banaction brackets would be overridden.
+banaction = iptables-allports
+chain     = DOCKER-USER
+ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16

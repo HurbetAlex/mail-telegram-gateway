@@ -1,0 +1,70 @@
+# Postfix Main Configuration
+
+# Identity
+myhostname = mail.example.com
+mydomain = example.com
+myorigin = $mydomain
+
+# Network
+inet_interfaces = all
+inet_protocols = ipv4
+smtp_address_preference = ipv4
+lmtp_address_preference = ipv4
+mynetworks = 127.0.0.0/8 [::1]/128 172.16.0.0/12 192.168.0.0/16 10.0.0.0/8
+
+# Handling
+maillog_file = /dev/stdout
+
+# Virtual Domains (Inbound)
+# Add a new person's domain here and in DOMAIN_OWNERS (.env):
+# without this line postfix rejects the email as "Relay access denied"
+virtual_mailbox_domains = example.com, guest.example.com, team.example.com
+virtual_mailbox_maps = static:all
+virtual_transport = lmtp:inet:app:8024
+
+# Milter (Rspamd)
+smtpd_milters = inet:rspamd:11332
+non_smtpd_milters = inet:rspamd:11332
+milter_protocol = 6
+milter_mail_macros = i {mail_addr} {client_addr} {client_name} {auth_authen}
+milter_default_action = accept
+
+# TLS
+smtpd_tls_security_level = may
+smtpd_tls_auth_only = no
+smtp_tls_security_level = may
+smtpd_tls_cert_file = /etc/postfix/certs/cert.pem
+smtpd_tls_key_file = /etc/postfix/certs/key.pem
+smtpd_tls_loglevel = 1
+
+# SASL Auth (Outbound/Submission)
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_path = smtpd
+smtpd_sasl_type = cyrus
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_local_domain = $mydomain
+smtpd_sender_login_maps = hash:/etc/postfix/sender_login
+
+# Restrictions (Security)
+smtpd_helo_required = yes
+smtpd_recipient_restrictions =
+    permit_mynetworks,
+    permit_sasl_authenticated,
+    reject_unauth_destination
+
+smtpd_sender_restrictions =
+    permit_mynetworks,
+    reject_sender_login_mismatch,
+    permit_sasl_authenticated,
+    reject_unknown_sender_domain
+
+# Anti-brute-force (anvil): per-client limits per anvil_rate_time_unit (60s).
+# Local clients (app in the docker network, $mynetworks) are not subject to limits.
+# IP bans on top of this are done by fail2ban (scripts/setup-fail2ban.sh).
+smtpd_client_auth_rate_limit = 10
+smtpd_client_connection_rate_limit = 60
+smtpd_client_event_limit_exceptions = $mynetworks
+
+# Limits
+message_size_limit = 52428800
+mailbox_size_limit = 0

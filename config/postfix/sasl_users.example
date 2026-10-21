@@ -1,0 +1,3 @@
+# user:password, one per line. Copy to sasl_users (git-ignored) and change the passwords.
+# The user name must match an entry in sender_login.
+admin:change-me

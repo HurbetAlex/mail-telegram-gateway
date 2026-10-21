@@ -1,0 +1,184 @@
+# The project name is pinned: otherwise it is taken from the directory name, and when moving
+# the code to another path docker would create new empty volumes (losing the mail in Mongo).
+name: mailgateway
+
+services:
+  postfix:
+    build:
+      context: ./config/postfix
+      dockerfile: Dockerfile
+    container_name: postfix
+    restart: always
+    ports:
+      - "25:25"
+      - "587:587"
+      - "465:465"
+
+    entrypoint: [ "/bin/sh", "/entrypoint.sh" ]
+    volumes:
+      - ./config/postfix/entrypoint.sh:/entrypoint.sh
+      - ./config/postfix/main.cf:/etc/postfix/main.cf
+      - ./config/postfix/master.cf:/etc/postfix/master.cf
+      - ./config/postfix/sasl_users:/etc/postfix/sasl_users
+      - ./config/postfix/sender_login:/etc/postfix/sender_login
+      - postfix_data:/var/spool/postfix
+    depends_on:
+      - rspamd
+      - app
+    # Logs go to journald: fail2ban reads them (backend systemd, CONTAINER_NAME=postfix).
+    # `docker logs postfix` keeps working (the journald driver supports reading).
+    logging:
+      driver: journald
+      options:
+        tag: postfix
+    networks:
+      - mailnet
+
+  rspamd:
+    image: rspamd/rspamd:latest
+    container_name: rspamd
+    restart: always
+    volumes:
+      - ./config/rspamd/local.d:/etc/rspamd/local.d
+      - rspamd_data:/var/lib/rspamd
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - mailnet
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - mailnet
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - mailnet
+
+  app:
+    build:
+      context: .
+      dockerfile: src/Dockerfile
+    container_name: mail_processor
+    restart: always
+    environment:
+      - MONGO_URI=mongodb://mongo:27017
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_ID=${ADMIN_ID}
+      - GUEST_ID=${GUEST_ID}
+      - MAIL_DOMAIN=${MAIL_DOMAIN:-example.com}
+      - GUEST_DOMAIN=${GUEST_DOMAIN:-guest.example.com}
+      # Subdomain owners: "domain:tg_id,domain:tg_id".
+      # A new person is added with one entry here + a domain in
+      # virtual_mailbox_domains (config/postfix/main.cf).
+      - DOMAIN_OWNERS=${DOMAIN_OWNERS:-}
+      - MAIL_SIGNATURE=${MAIL_SIGNATURE:-}
+      - MAIL_TTL_DAYS=${MAIL_TTL_DAYS:-180}
+      - WEBAPP_URL=${WEBAPP_URL:-}
+      - DIGEST_TIME=${DIGEST_TIME:-09:00}
+      - DIGEST_TZ=${DIGEST_TZ:-Europe/Kyiv}
+      - HEALTH_CHECK_MINUTES=${HEALTH_CHECK_MINUTES:-5}
+      - WEBAPP_DOMAIN=${WEBAPP_DOMAIN:-mail.example.com}
+      - CLEANUP_TIME=${CLEANUP_TIME:-04:30}
+      - CLEANUP_GRACE_DAYS=${CLEANUP_GRACE_DAYS:-3}
+      - DISK_ALERT_PCT=${DISK_ALERT_PCT:-90}
+      - MEM_ALERT_MB=${MEM_ALERT_MB:-100}
+      - SWAP_ALERT_PCT=${SWAP_ALERT_PCT:-85}
+      - CERT_ALERT_DAYS=${CERT_ALERT_DAYS:-14}
+      - BACKUP_DIR=/backups
+      - BACKUP_TG_WEEKDAY=${BACKUP_TG_WEEKDAY:-6}
+      - BACKUP_TG_TIME=${BACKUP_TG_TIME:-05:00}
+      - BLOB_DIR=/data/blobs
+      - BLOB_ATTACH_MAX_MB=${BLOB_ATTACH_MAX_MB:-5}
+      - BLOB_HTML_MAX_KB=${BLOB_HTML_MAX_KB:-512}
+      - BLOB_TTL_DAYS=${BLOB_TTL_DAYS:-30}
+      - BLOB_MAX_MB=${BLOB_MAX_MB:-300}
+      - BLOB_PER_MAIL_MB=${BLOB_PER_MAIL_MB:-20}
+      - BLOB_MIN_FREE_MB=${BLOB_MIN_FREE_MB:-500}
+      - PYTHONPATH=/app
+    volumes:
+      - ./src:/app/src
+      - ./backups:/backups:ro
+      - ./status/out:/status/out:ro
+      - ./status/requests:/status/requests
+      - ./blobs:/data/blobs
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - mailnet
+
+  # Mini App hosting (web/) + /api proxy -> app, automatic Let's Encrypt.
+  # Requires: a DNS A record WEBAPP_DOMAIN -> server and free ports 80/443.
+  web:
+    image: caddy:alpine
+    container_name: mail_web
+    restart: always
+    environment:
+      - WEBAPP_DOMAIN=${WEBAPP_DOMAIN:-mail.example.com}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web:/srv:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - mailnet
+
+  # Daily Mongo backup to ./backups (kept for BACKUP_KEEP_DAYS days)
+  backup:
+    image: mongo:latest
+    container_name: mail_backup
+    restart: always
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          mongodump --host mongo --archive=/backup/mail_$$(date +%F).gz --gzip &&
+          find /backup -name 'mail_*.gz' -mtime +${BACKUP_KEEP_DAYS:-14} -delete
+          sleep 86400
+        done
+    volumes:
+      - ./backups:/backup
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - mailnet
+
+networks:
+  mailnet:
+    driver: bridge
+
+volumes:
+  postfix_data:
+  rspamd_data:
+  redis_data:
+  mongo_data:
+  caddy_data:
+  caddy_config:

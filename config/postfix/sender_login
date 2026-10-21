@@ -1,0 +1,12 @@
+# Which SASL login may send from which address
+# (smtpd_sender_login_maps, enforced via reject_sender_login_mismatch).
+# The login includes the domain because smtpd_sasl_local_domain = $mydomain
+# appends @example.com to the user name from sasl_users.
+# Sending by the bot goes through mynetworks (permit_mynetworks) and does not touch this map.
+@example.com admin@example.com
+test@example.com admin@example.com
+admin@example.com admin@example.com
+@guest.example.com john@example.com
+john@guest.example.com john@example.com
+@team.example.com team@example.com
+team@team.example.com team@example.com
