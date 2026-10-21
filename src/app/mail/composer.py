@@ -59,7 +59,31 @@ def final_bodies(data: dict) -> Tuple[str, Optional[str]]:
     return text, html_frag or None
 
 
-def reply_state(mail: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+class InvalidSender(ValueError):
+    """The From address does not belong to the user's domains."""
+
+
+def default_from_address(user_id: int) -> Optional[str]:
+    """Default sender for the user: <first label>@subdomain, else mail@<domain>."""
+    domains = sorted(user_domains(user_id))
+    for d in domains:
+        if d.count(".") >= 2:
+            return validate_from_address(user_id, f"{d.split('.')[0]}@{d}")
+    for d in domains:
+        return validate_from_address(user_id, f"mail@{d}")
+    return None
+
+
+def _reply_from(user_id: int, mail: Dict[str, Any]) -> str:
+    """The address the mail was sent to, only if it is the user's own; otherwise the default.
+
+    The recipient of a stored mail is attacker-influenced (any local part on our domain is
+    accepted), so it is never trusted as a From address without validation.
+    """
+    return validate_from_address(user_id, mail.get("to")) or default_from_address(user_id) or ""
+
+
+def reply_state(mail: Dict[str, Any], user_id: int) -> Optional[Dict[str, Any]]:
     """Initial data for replying to an email; None if the sender address cannot be parsed."""
     _, orig_from_addr = parseaddr(str(mail.get("from") or ""))
     if not orig_from_addr:
@@ -69,7 +93,7 @@ def reply_state(mail: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         subject = f"Re: {subject}"
     return dict(
         mode="reply",
-        from_addr=str(mail.get("to") or ""),
+        from_addr=_reply_from(user_id, mail),
         to=[orig_from_addr],
         subject=subject,
         in_reply_to=mail.get("message_id"),
@@ -80,14 +104,14 @@ def reply_state(mail: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     )
 
 
-def fwd_state(mail: Dict[str, Any]) -> Dict[str, Any]:
+def fwd_state(mail: Dict[str, Any], user_id: int) -> Dict[str, Any]:
     """Initial data for forwarding an email."""
     subject = str(mail.get("subject") or "")
     if not subject.lower().startswith("fwd:"):
         subject = f"Fwd: {subject}"
     return dict(
         mode="fwd",
-        from_addr=str(mail.get("to") or ""),
+        from_addr=_reply_from(user_id, mail),
         subject=subject,
         orig_from=str(mail.get("from") or ""),
         orig_subject=str(mail.get("subject") or ""),
@@ -102,6 +126,10 @@ async def send_and_record(user_id: int, data: Dict[str, Any]) -> str:
 
     The send_email exception is propagated: the caller decides (the bot writes to the chat, the API returns 502).
     """
+    from_addr = validate_from_address(user_id, data.get("from_addr"))
+    if from_addr is None:
+        raise InvalidSender("Sender address is not allowed for this user")
+    data = {**data, "from_addr": from_addr}
     text, html_frag = final_bodies(data)
     msg_id = await send_email(
         from_addr=data["from_addr"],

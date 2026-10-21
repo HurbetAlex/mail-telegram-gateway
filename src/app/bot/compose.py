@@ -396,7 +396,7 @@ async def cb_reply_start(call: CallbackQuery, state: FSMContext):
         await call.answer("Mail not found in the database", show_alert=True)
         return
 
-    st = reply_state(mail)
+    st = reply_state(mail, call.from_user.id)
     if st is None:
         await call.answer("Could not parse the sender address", show_alert=True)
         return
@@ -423,7 +423,7 @@ async def cb_fwd_start(call: CallbackQuery, state: FSMContext):
         return
 
     await state.clear()
-    await state.update_data(**fwd_state(mail))
+    await state.update_data(**fwd_state(mail, call.from_user.id))
     await state.set_state(Compose.to)
     await call.message.answer("➡️ Forward to whom? Enter the address:")
     await call.answer()

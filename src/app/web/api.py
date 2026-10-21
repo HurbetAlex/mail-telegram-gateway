@@ -592,7 +592,7 @@ async def send_mail(request: web.Request) -> web.Response:
         mail, err = await _mail_for_compose(uid, reply_to)
         if err:
             return err
-        st = composer.reply_state(mail)
+        st = composer.reply_state(mail, uid)
         if st is None:
             return _bad("Could not parse the sender address")
         # "Re: ..." subject and thread headers work as in the bot; from/to are set by the user
@@ -607,7 +607,7 @@ async def send_mail(request: web.Request) -> web.Response:
         mail, err = await _mail_for_compose(uid, forward_of)
         if err:
             return err
-        st = composer.fwd_state(mail)
+        st = composer.fwd_state(mail, uid)
         data.update(
             mode="fwd",
             subject=subject or st["subject"],
