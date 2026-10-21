@@ -93,3 +93,22 @@ def is_bulk(msg) -> bool:
     if _get(msg, "List-Unsubscribe") or _get(msg, "List-Id"):
         return True
     return _get(msg, "Precedence").lower() in _BULK_PRECEDENCE
+
+
+# --- Trust in headers added by our own filter -------------------------------------
+# Anything in an incoming message can be forged by the sender, including X-Spam-* and
+# Authentication-Results. Postfix strips such headers on input (config/postfix/header_checks)
+# and rspamd adds its own; the helpers below stay safe even if one copy slips through.
+
+def is_spam_verdict(msg: Any) -> bool:
+    """True if ANY X-Spam-Status header says "Yes".
+
+    A sender can add a fake "No" but cannot remove the "Yes" that rspamd adds, so every
+    instance is checked instead of the first one. A forged "Yes" only marks the sender's
+    own mail as spam.
+    """
+    try:
+        values = msg.get_all("X-Spam-Status") or []
+        return any(str(v).strip().lower().startswith("yes") for v in values)
+    except Exception:
+        return False

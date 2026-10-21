@@ -1,0 +1,6 @@
+# Strip filter-result headers a sender may forge. Rspamd adds its own copies after this
+# (milter runs after header_checks), and the app trusts only those.
+/^X-Spam-/                IGNORE
+/^X-Spamd-/               IGNORE
+/^Authentication-Results:/ IGNORE
+/^X-Rspamd-/              IGNORE

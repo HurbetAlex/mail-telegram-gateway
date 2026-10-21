@@ -21,6 +21,7 @@ services:
       - ./config/postfix/master.cf:/etc/postfix/master.cf
       - ./config/postfix/sasl_users:/etc/postfix/sasl_users
       - ./config/postfix/sender_login:/etc/postfix/sender_login
+      - ./config/postfix/header_checks:/etc/postfix/header_checks:ro
       - postfix_data:/var/spool/postfix
     depends_on:
       - rspamd

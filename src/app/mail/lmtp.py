@@ -10,7 +10,12 @@ from src.app.bot.auth import owner_of
 from src.app.bot.sender import send_attachments, send_telegram_message
 from src.app.db import storage
 from src.app.mail import blobstore
-from src.app.utils.headers import collect_headers, is_bulk, parse_list_unsubscribe
+from src.app.utils.headers import (
+    collect_headers,
+    is_bulk,
+    is_spam_verdict,
+    parse_list_unsubscribe,
+)
 from src.app.utils.parser import (
     clean_local_part,
     extract_html,
@@ -90,8 +95,9 @@ class Handler:
 
         try:
             msg, body, attachments = parse_email(envelope.content)
-            # The header is added by rspamd (local.d/milter_headers.conf)
-            is_spam = msg.get("X-Spam-Status", "").lower().startswith("yes")
+            # Headers are added by rspamd (local.d/milter_headers.conf); forged copies from the
+            # sender are stripped by Postfix, and every instance is checked anyway
+            is_spam = is_spam_verdict(msg)
             subject = str(msg.get("Subject") or "")
             otp = extract_otp(body, subject=subject)
             bulk = is_bulk(msg)

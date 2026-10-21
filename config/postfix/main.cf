@@ -22,6 +22,9 @@ virtual_mailbox_domains = example.com, guest.example.com, team.example.com
 virtual_mailbox_maps = static:all
 virtual_transport = lmtp:inet:app:8024
 
+# Drop forged X-Spam-* / Authentication-Results headers from incoming mail
+header_checks = regexp:/etc/postfix/header_checks
+
 # Milter (Rspamd)
 smtpd_milters = inet:rspamd:11332
 non_smtpd_milters = inet:rspamd:11332
