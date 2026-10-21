@@ -95,6 +95,8 @@ services:
       # virtual_mailbox_domains (config/postfix/main.cf).
       - DOMAIN_OWNERS=${DOMAIN_OWNERS:-}
       - MAIL_SIGNATURE=${MAIL_SIGNATURE:-}
+      # authserv-id in Authentication-Results, must equal `hostname` in rspamd milter_headers.conf
+      - AUTHSERV_ID=${AUTHSERV_ID:-mail.example.com}
       - MAIL_TTL_DAYS=${MAIL_TTL_DAYS:-180}
       - WEBAPP_URL=${WEBAPP_URL:-}
       - DIGEST_TIME=${DIGEST_TIME:-09:00}

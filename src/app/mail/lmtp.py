@@ -15,6 +15,7 @@ from src.app.utils.headers import (
     is_bulk,
     is_spam_verdict,
     parse_list_unsubscribe,
+    sender_authenticated,
 )
 from src.app.utils.parser import (
     clean_local_part,
@@ -29,6 +30,8 @@ from src.app.utils.settings import default_settings, is_silent
 logger = logging.getLogger(__name__)
 
 ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+# authserv-id our rspamd puts into Authentication-Results (milter_headers.conf: hostname)
+AUTHSERV_ID = os.getenv("AUTHSERV_ID") or f"mail.{os.getenv('MAIL_DOMAIN', 'example.com')}"
 
 
 class Handler:
@@ -109,6 +112,9 @@ class Handler:
             # ones beat global ones): allow (whitelist, saves forwarding with a
             # broken SPF) or mute (no notifications)
             sender_addr = parseaddr(str(msg.get("From") or mail_from))[1]
+            # "allow" is only honoured when From is confirmed by DKIM/DMARC results of our own
+            # filter: the From header alone is trivially forged
+            from_authenticated = sender_authenticated(msg, sender_addr, AUTHSERV_ID)
 
             for rcpt in rcpt_tos:
                 domain = rcpt.split("@")[-1].lower()
@@ -154,6 +160,9 @@ class Handler:
                     rule_action = await storage.db.match_rule(sender_addr, user_id or None)
                 except Exception:
                     logger.exception("Rule lookup failed")
+                    rule_action = None
+                if rule_action == "allow" and not from_authenticated:
+                    logger.info(f"Allow rule for {sender_addr} ignored: sender not authenticated")
                     rule_action = None
 
                 # Alias ("address per service"): when disabled, the email is stored without a notification

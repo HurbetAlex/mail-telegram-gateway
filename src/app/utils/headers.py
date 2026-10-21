@@ -112,3 +112,46 @@ def is_spam_verdict(msg: Any) -> bool:
         return any(str(v).strip().lower().startswith("yes") for v in values)
     except Exception:
         return False
+
+
+def _aligned(from_domain: str, auth_domain: str) -> bool:
+    a, b = from_domain.lower().strip("."), auth_domain.lower().strip("<>. ")
+    if not a or not b:
+        return False
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
+
+
+def sender_authenticated(msg: Any, from_addr: str, authserv_id: str) -> bool:
+    """True if our own Authentication-Results (authserv-id match) confirms the From domain.
+
+    Requires dmarc=pass, or dkim=pass whose header.d is aligned with the From domain.
+    SPF alone is not enough (it validates the envelope sender, not From).
+    """
+    from_domain = (from_addr or "").rpartition("@")[2].strip().lower()
+    if not from_domain or not authserv_id:
+        return False
+    try:
+        values = msg.get_all("Authentication-Results") or []
+        for raw in values:
+            parts = [p.strip() for p in str(raw).replace("\n", " ").replace("\r", " ").split(";")]
+            if not parts or parts[0].split(" ")[0].lower() != authserv_id.lower():
+                continue
+            for part in parts[1:]:
+                tokens = part.split()
+                if not tokens:
+                    continue
+                method = tokens[0].lower()
+                props = {}
+                for tok in tokens[1:]:
+                    k, sep, v = tok.partition("=")
+                    if sep:
+                        props[k.lower()] = v
+                if method == "dmarc=pass":
+                    hf = props.get("header.from")
+                    if hf is None or _aligned(from_domain, hf):
+                        return True
+                if method == "dkim=pass" and _aligned(from_domain, props.get("header.d", "")):
+                    return True
+    except Exception:
+        return False
+    return False
