@@ -163,7 +163,12 @@ docker-compose.yml  postfix, rspamd, redis, mongo, app, web, backup
 - **SMTP AUTH hardening.** Postfix rate limits authentication attempts per IP, `sender_login` ties each SASL login to its allowed From addresses, and the bundled fail2ban filter bans IPs after repeated failed logins.
 - **Unsubscribe safety.** One-click unsubscribe only calls https URLs that resolve to public IPs, without following redirects. `mailto:` targets are strictly validated.
 - **Secrets.** `.env`, `sasl_users`, DKIM keys and backups are git-ignored. The example files contain placeholders only.
-- **Known limits.** Mail is stored unencrypted in MongoDB, and the default Postfix TLS setting is opportunistic. Terminate trust at the host level (disk encryption, firewall) and review `main.cf` before exposing the server.
+- **Forged reply sender.** The From address of a reply or forward is checked against the user's own addresses before sending. The To header of an incoming mail is never trusted as a sender.
+- **Forged filter headers.** Postfix strips incoming `X-Spam-*`, `X-Spamd-*`, `X-Rspamd-*` and `Authentication-Results` headers before Rspamd adds its own, and the app marks a mail as spam if any `X-Spam-Status` header says Yes.
+- **Allow rules need authentication.** An "allow" rule for a sender takes effect only when Rspamd reports `dmarc=pass` or an aligned `dkim=pass` for the From domain; otherwise the spam verdict stands.
+- **Insert-only storage.** A stored mail is never overwritten. Deduplication uses a hash of the raw message plus the recipient, not the sender-controlled Message-ID, and blobs of existing mails are left alone.
+- **TLS before AUTH.** `smtpd_tls_auth_only = yes`: SMTP AUTH is offered only after STARTTLS.
+- **Known limits.** Mail is stored unencrypted in MongoDB, and the default Postfix TLS setting for mail exchange is opportunistic. Terminate trust at the host level (disk encryption, firewall) and review `main.cf` before exposing the server.
 
 ## Roadmap
 
