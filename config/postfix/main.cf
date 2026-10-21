@@ -34,7 +34,7 @@ milter_default_action = accept
 
 # TLS
 smtpd_tls_security_level = may
-smtpd_tls_auth_only = no
+smtpd_tls_auth_only = yes
 smtp_tls_security_level = may
 smtpd_tls_cert_file = /etc/postfix/certs/cert.pem
 smtpd_tls_key_file = /etc/postfix/certs/key.pem
