@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -50,8 +51,6 @@ class Handler:
     async def _store_blobs(oid: str, user_id, html_text, attachments) -> None:
         """HTML and attachments -> blob store, then links in the email. A failure does not lose the email."""
         try:
-            # Redelivery of the same email (upsert by message_id) does not create duplicates
-            await blobstore.delete_blobs_for_mails([oid])
             html_id = None
             if html_text:
                 data = html_text.encode("utf-8")
@@ -115,6 +114,8 @@ class Handler:
             # "allow" is only honoured when From is confirmed by DKIM/DMARC results of our own
             # filter: the From header alone is trivially forged
             from_authenticated = sender_authenticated(msg, sender_addr, AUTHSERV_ID)
+            # Server-side dedup key: hash of the raw message + recipient (Message-ID is attacker-chosen)
+            raw_hash = hashlib.sha256(envelope.content).hexdigest()
 
             for rcpt in rcpt_tos:
                 domain = rcpt.split("@")[-1].lower()
@@ -132,6 +133,7 @@ class Handler:
 
                 mail_doc = {
                     "message_id": msg.get("Message-ID"),
+                    "dedup_key": f"{raw_hash}:{rcpt.lower()}",
                     "from": str(msg.get("From") or mail_from),
                     "to": rcpt,
                     "subject": subject,
@@ -201,7 +203,10 @@ class Handler:
                 if otp and minutes > 0:
                     # When to hide the code: the masking query goes by mask_at (no starvation)
                     mail_doc["mask_at"] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-                oid = await storage.db.save_mail(mail_doc)
+                oid, created = await storage.db.save_mail_once(mail_doc)
+                if not created:
+                    logger.info(f"Duplicate delivery ignored: {oid}")
+                    continue
                 await self._store_blobs(oid, user_id, html_text, attachments)
 
                 # Silent: newsletter without a code or quiet hours without a code (a code always makes a sound)

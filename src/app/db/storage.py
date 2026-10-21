@@ -29,6 +29,7 @@ class Storage:
 
     async def ensure_indexes(self):
         await self.db.mails.create_index("message_id")
+        await self.db.mails.create_index("dedup_key")
         await self.db.mails.create_index("status")
         await self.db.deliveries.create_index("mail_id")
         await self.db.blobs.create_index("mail_id")
@@ -225,23 +226,30 @@ class Storage:
 
     # --- Mails ---
 
-    async def save_mail(self, mail_data: Dict[str, Any]) -> str:
-        """Saves a mail and returns the string _id.
+    async def save_mail_once(self, mail_data: Dict[str, Any]) -> Tuple[str, bool]:
+        """Insert-only save: returns (_id, created).
 
-        Deduplication by (message_id, to): one mail to two recipients
-        yields two documents.
+        Deduplication key: `dedup_key` (hash of the raw message + recipient, computed from
+        server-side data) if present, else (message_id, to). An existing document is never
+        modified, so a sender who repeats a Message-ID cannot overwrite a stored mail.
         """
-        msg_id = mail_data.get("message_id")
-        if msg_id:
-            doc = await self.db.mails.find_one_and_update(
-                {"message_id": msg_id, "to": mail_data.get("to")},
-                {"$set": mail_data},
-                upsert=True,
-                return_document=ReturnDocument.AFTER,
-            )
-            return str(doc["_id"])
-        res = await self.db.mails.insert_one(mail_data)
-        return str(res.inserted_id)
+        if mail_data.get("dedup_key"):
+            flt = {"dedup_key": mail_data["dedup_key"]}
+        elif mail_data.get("message_id"):
+            flt = {"message_id": mail_data["message_id"], "to": mail_data.get("to")}
+        else:
+            res = await self.db.mails.insert_one(mail_data)
+            return str(res.inserted_id), True
+        res = await self.db.mails.update_one(flt, {"$setOnInsert": mail_data}, upsert=True)
+        if res.upserted_id is not None:
+            return str(res.upserted_id), True
+        doc = await self.db.mails.find_one(flt, {"_id": 1})
+        return str(doc["_id"]), False
+
+    async def save_mail(self, mail_data: Dict[str, Any]) -> str:
+        """Saves a mail (insert-only, see save_mail_once) and returns the string _id."""
+        oid, _ = await self.save_mail_once(mail_data)
+        return oid
 
     async def get_mail(self, oid: str) -> Optional[Dict[str, Any]]:
         try:

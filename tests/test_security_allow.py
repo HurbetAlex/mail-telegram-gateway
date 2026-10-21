@@ -50,6 +50,7 @@ def run_handler(monkeypatch, raw: bytes, rule="allow"):
         match_rule=AsyncMock(return_value=rule),
         get_alias=AsyncMock(return_value=None),
         save_mail=AsyncMock(return_value="oid1"),
+        save_mail_once=AsyncMock(return_value=("oid1", True)),
         get_settings=AsyncMock(return_value={}),
         add_delivery=AsyncMock(),
         set_mail_status=AsyncMock(),
@@ -81,5 +82,5 @@ def test_allow_rule_works_with_authenticated_sender(monkeypatch):
         + b"Authentication-Results: mail.example.com; dmarc=pass header.from=bank.com\r\n\r\nhi\r\n"
     )
     db = run_handler(monkeypatch, raw)
-    db.save_mail.assert_awaited_once()
-    assert db.save_mail.await_args.args[0]["status"] == "delivered"
+    db.save_mail_once.assert_awaited_once()
+    assert db.save_mail_once.await_args.args[0]["status"] == "delivered"
