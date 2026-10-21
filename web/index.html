@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mail</title>
+<!-- No SRI: Telegram updates this script in place without versioning. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="stylesheet" href="app.css?v=4">
+</head>
+<body>
+<div id="app">
+  <main id="main">
+    <!-- Inbox -->
+    <section class="page" id="pageInbox" hidden>
+      <div class="searchbar"><input id="search" type="search" placeholder="Sender, subject, text, address" autocomplete="off"><button class="info" id="searchHelp" aria-label="Search operators" title="Search operators">ⓘ</button></div>
+      <div class="chips" id="chips"></div>
+      <div id="codesBar" class="codesbar" hidden></div>
+      <div class="card list" id="list"></div>
+      <div id="sentinel" class="sentinel"></div>
+      <div class="empty" id="empty" hidden></div>
+    </section>
+
+    <!-- Compose -->
+    <section class="page" id="pageCompose" hidden>
+      <div class="banner" id="composeBanner" hidden></div>
+      <div class="card form">
+        <label for="from">From</label>
+        <div class="from-row" id="fromKb" hidden>
+          <input id="from" list="aliases" placeholder="sam" autocapitalize="none" autocomplete="off">
+          <span class="domain" id="domainLabel"></span>
+          <datalist id="aliases"></datalist>
+        </div>
+        <select id="fromSel" hidden></select>
+        <div class="from-row other" id="fromOther" hidden>
+          <input id="fromLocal" placeholder="name" autocapitalize="none" autocomplete="off">
+          <span class="domain">@</span>
+          <select id="fromDomain"></select>
+        </div>
+        <label for="to">To</label>
+        <div class="suggest-wrap">
+          <input id="to" type="text" inputmode="email" placeholder="user@example.com, another@example.org" autocapitalize="none" autocomplete="off">
+          <div id="toSug" class="suggest" hidden></div>
+        </div>
+        <label for="subject">Subject</label>
+        <input id="subject" placeholder="Email subject">
+        <div class="label-row">
+          <label for="body">Text</label>
+          <select id="tplSel" class="mini" hidden></select>
+        </div>
+        <textarea id="body" placeholder="Email text"></textarea>
+        <div id="attachBox" hidden>
+          <div class="files" id="files"></div>
+          <label class="btn ghost" for="fileInput">📎 Add file</label>
+          <input type="file" id="fileInput" multiple hidden>
+          <div class="hint" id="attachHint">Up to 15 MB total</div>
+        </div>
+      </div>
+      <div class="actions" id="sendRow" hidden>
+        <button class="btn primary wide" id="sendBtn">Send email</button>
+      </div>
+    </section>
+
+    <!-- Addresses -->
+    <section class="page" id="pageAddr" hidden>
+      <div class="card form">
+        <h2>Where did I sign up?</h2>
+        <input id="whereQ" type="search" placeholder="Service or address: github, shop@…" autocomplete="off" autocapitalize="none">
+        <div id="whereRes"></div>
+      </div>
+      <div class="card form">
+        <h2>My addresses</h2>
+        <div class="hint">A separate address for each service shows who leaks your email.</div>
+        <label for="aliasName">Address name</label>
+        <input id="aliasName" placeholder="shop or shop@example.com" autocapitalize="none" autocomplete="off">
+        <label for="aliasNote">Note</label>
+        <input id="aliasNote" placeholder="For example: online store" maxlength="200">
+        <div class="actions"><button class="btn primary" id="aliasCreate">Create address</button></div>
+        <div id="aliasCreated"></div>
+      </div>
+      <div class="card list" id="aliasList"></div>
+      <div class="empty" id="aliasEmpty" hidden>No addresses yet. Create the first one above.</div>
+    </section>
+
+    <!-- More -->
+    <section class="page" id="pageMore" hidden>
+      <div class="card list menu" id="moreMenu"></div>
+      <div class="card form help" id="moreHelp"></div>
+    </section>
+  </main>
+
+  <!-- Nested screens (BackButton) -->
+  <div id="stack"></div>
+
+  <nav id="tabbar" class="tabbar" hidden>
+    <button class="tab" data-tab="inbox"><span class="ti">📥</span><span>Mail</span><span class="dot" id="unreadDot" hidden></span></button>
+    <button class="tab" data-tab="compose"><span class="ti">✍️</span><span>Compose</span></button>
+    <button class="tab" data-tab="addr"><span class="ti">🏷</span><span>Addresses</span></button>
+    <button class="tab" data-tab="more"><span class="ti">⚙️</span><span>More</span></button>
+  </nav>
+  <div id="selBar" class="selbar" hidden>
+    <button id="selX" aria-label="Clear selection">✕</button>
+    <span id="selCount"></span>
+    <div class="selacts">
+      <button data-act="star" title="Star">⭐</button>
+      <button data-act="unstar" title="Unstar">☆</button>
+      <button data-act="read" title="Mark as read">✓</button>
+      <button data-act="unread" title="Mark as unread">●</button>
+      <button data-act="unsubscribe" title="Unsubscribe">🚫</button>
+      <button data-act="delete" title="Delete">🗑</button>
+    </div>
+  </div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="sheetHost"></div>
+</div>
+<script src="app.js?v=4"></script>
+</body>
+</html>
